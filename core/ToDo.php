@@ -22,6 +22,10 @@
      `json` text NOT NULL,
      PRIMARY KEY (`id`)
    ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+ * 
+ * # Create a username
+ * INSERT INTO `auth` (`id`, `un`, `pw`) VALUES (NULL, 'myuser', MD5('mypassword'));
+ * 
  * Classes
  */
 
