@@ -1,0 +1,100 @@
+body {
+	font-family: 'Proxima Nova', 'Helvetica Neue', helvetica, arial, sans-serif;
+	font-size: 10pt;
+	line-height: 21px;
+}
+ul {
+	list-style: none;
+	padding-left: 0;
+}
+li {
+	overflow: hidden;
+	margin-bottom: 10px;
+	border: 1px solid #999;
+	-webkit-border-radius: 3px;
+	-moz-border-radius: 3px;
+	border-radius: 3px;
+	padding: 10px;
+}
+.title {
+	font-size: 20px;
+	font-weight: bold;
+	line-height: 25px;
+	margin-bottom: 2px;
+}
+.dueBy {
+	margin-bottom: 5px;
+}
+.links {
+	float: right;
+}
+input[type="checkbox"] {
+	float: left;
+	margin: 7px 10px 0 0;
+}
+#newtask input[type="text"], li input[type="text"] {
+	font-family: 'Proxima Nova', 'Helvetica Neue', helvetica, arial, sans-serif;
+	font-size: 10pt;
+	margin: -1px;
+	border: 0;
+	background-color: lightyellow;
+	outline: none;
+	line-height: 16.5px;
+}
+textarea {
+	font-family: 'Proxima Nova', 'Helvetica Neue', helvetica, arial, sans-serif;
+	font-size: 10pt;	
+	margin: 1px -2px 0 -2px;
+	border: 0;
+	background-color: lightyellow;
+	outline: none;
+	resize: none;
+	line-height: 16.5px;
+}
+.title input[type="text"] {
+	font-size: 20px;
+}
+.edit, .delete {
+	cursor: pointer;
+	text-decoration: underline;
+}
+li input[type="text"], li button, li textarea {
+	display: none;
+}
+#title {
+	width: 400px;	
+	font-size: 20px;
+	font-weight: bold;
+	line-height: 25px;
+}
+.editTitle {
+	width: 380px;
+	font-size: 20px;
+	font-weight: bold;
+	line-height: 25px;
+}
+.editPriority {
+	width: 30px;
+}
+#dueBy, .editDueBy {
+	width: 150px;
+	margin-bottom: 5px;
+}
+.editDetails {
+	width: 400px;
+	height: 100px;
+}
+#details {
+	width: 400px;
+	height: 50px;
+}
+#newtask {
+	display: none;
+}
+#login {
+	display: none;
+}
+#logout {
+	display: none;
+	float: right;
+}
