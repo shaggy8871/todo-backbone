@@ -31,6 +31,13 @@
 	Password: <input type="password" name="pw" /> <input type="submit" value="Login" />
 	<input type="hidden" name="next" value="redirect" />
 	</form>
+	-- or --
+	<form action="/todo/core/ToDo.php/register" method="post">
+	Login: <input type="text" name="un" /><br />
+	Password: <input type="password" name="pw" /> <input type="submit" value="Register" />
+	<input type="hidden" name="next" value="redirect" />
+	</form>
+
 </div>
 <div id="logout">
 	<form action="/todo/core/ToDo.php/logout" method="post">
