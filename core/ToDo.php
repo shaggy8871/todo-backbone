@@ -7,6 +7,7 @@
  * -- PUT /id + data - updates an entry
  * -- POST /auth - logs in
  * -- POST /logout - logs out
+ * -- POST /register - creates a new account
  * -- DELETE /id - deletes a specific entry
  * 
  * DB Setup:
@@ -64,9 +65,10 @@ class Entry {
 
 class Status {
 
-	public function show ($code) {
+	public function show ($code, $redirect = '') {
 		switch ($code) {
 			case 200:	header ("HTTP/1.1 200 Success"); break;
+			case 302:	header ("HTTP/1.1 302 Moved Temporarily"); header ("Location: ".$redirect); break;
 			case 400:	header ("HTTP/1.1 400 Bad Request"); echo "400 Bad Request"; break;
 			case 401:	header ("HTTP/1.1 401 Not Authorized"); echo "401 Not Authorized"; break;
 			case 404:	header ("HTTP/1.1 404 Not Found"); echo "404 Not Found"; break;
@@ -145,10 +147,18 @@ class REST {
 								session_start ();
 								$_SESSION['auth'] = '';
 								if ($_POST['next'] == 'redirect') {
-									header ("HTTP/1.1 302 Moved Temporarily");
-									header ("Location: /todo/index.php");
+									$this->status->show (302, '/todo/index.php');
 								} else {
 									$this->status->show (200);
+								}
+								break;
+			case 'POST /register':
+								$un = $_POST['un'];
+								$pw = $_POST['pw'];
+								if ((!$un) && (!$pw)) {
+									$this->status->show (400); // param missing
+								} else {
+									$this->register ($un, $pw);
 								}
 								break;
 			default:			$this->status->show (404); // route not recognised
@@ -159,12 +169,18 @@ class REST {
 		$this->status->show (200);
 		header ("Content-Type: application/json; charset=utf-8");
 		if ($id) {
-			$sql = "SELECT json FROM list WHERE id = '$id'";
-			$res = $this->db->query ($sql);
-			$row = $res->fetch_assoc ();
-			if ($row) {
-				$rowJson = json_decode ($row['json']);
+			if ($stmt = $this->db->prepare ("SELECT json FROM list WHERE id = ?")) {
+				$stmt->bind_param ("i", $id);
+				$stmt->execute ();
+				$stmt->bind_result ($json);
+				$stmt->fetch ();
+				$stmt->close ();
+			}
+			if ($json) {
+				$rowJson = json_decode ($json);
 				$rowJson->dueBy = date ("Y-m-d H:i:s", $rowJson->dueBy);
+				$rowJson->title = htmlspecialchars ($rowJson->title);
+				$rowJson->details = htmlspecialchars ($rowJson->details);
 				$rowJson->id = $id;
 				echo "[";
 				echo json_encode ($rowJson);
@@ -173,28 +189,44 @@ class REST {
 				$this->status->show (404); // id not found
 			}
 		} else {
-			$sql = "SELECT id, json FROM list";
-			$res = $this->db->query ($sql);
-			$i = 0;
-			echo "[";
-			while ($row = $res->fetch_assoc ()) {
-				$rowJson = json_decode ($row['json']);
-				$rowJson->dueBy = date ("Y-m-d H:i:s", $rowJson->dueBy);
-				$rowJson->id = $row['id'];
-				echo json_encode ($rowJson).($i + 1 < $res->num_rows ? "," : ""); $i++;
+			if ($stmt = $this->db->prepare ("SELECT id, json FROM list")) {
+				$stmt->execute ();
+				$stmt->bind_result ($id, $json);
+				$i = 0;
+				echo "[";
+				while ($stmt->fetch ()) {
+					if ($i) {
+						echo ',';
+					}
+					$rowJson = json_decode ($json);
+					$rowJson->dueBy = date ("Y-m-d H:i:s", $rowJson->dueBy);
+					$rowJson->title = htmlspecialchars ($rowJson->title);
+					$rowJson->details = htmlspecialchars ($rowJson->details);
+					$rowJson->id = $id;
+					echo json_encode ($rowJson);
+					$i++;
+				}
+				echo "]";
+				$stmt->close ();
 			}
-			echo "]";
 		}
 	}
 
 	public function put ($entry, $id) {
-		$sql = "SELECT json FROM list WHERE id = '$id'";
-		$res = $this->db->query ($sql);
-		$row = $res->fetch_assoc ();
-		if ($row) {
+		if ($stmt = $this->db->prepare ("SELECT json FROM list WHERE id = ?")) {
+			$stmt->bind_param ("i", $id);
+			$stmt->execute ();
+			$stmt->bind_result ($json);
+			$stmt->fetch ();
+			$stmt->close ();
+		}
+		if ($json) { // exists...
 			$entry->dueBy = strtotime ($entry->dueBy);
-			$sql = "UPDATE list SET json = '".addslashes (json_encode ($entry))."' WHERE id = '$id'";
-			$this->db->query ($sql);
+			if ($stmt = $this->db->prepare ("UPDATE list SET json = ? WHERE id = ?")) {
+				$stmt->bind_param ("si", json_encode ($entry), $id);
+				$stmt->execute ();
+				$stmt->close ();
+			}
 			$this->status->show (200);
 		} else {
 			$this->status->show (404); // id not found
@@ -203,12 +235,19 @@ class REST {
 
 	public function post ($entry) {
 		$entry->dueBy = strtotime ($entry->dueBy);
-		$sql = "INSERT INTO list (json) values ('".addslashes (json_encode ($entry))."')";
-		$this->db->query ($sql);
-		$entry->id = $entry->_id = $this->db->insert_id;
-		if ($entry->id) {
+		if ($stmt = $this->db->prepare ("INSERT INTO list (json) VALUES (?)")) {
+			$stmt->bind_param ("s", json_encode ($entry));
+			$stmt->execute ();
+			$id = $stmt->insert_id;
+			$stmt->close ();
+		}
+		if ($id) {
 			$this->status->show (200);
 			$entry->dueBy = date ("Y-m-d H:i:s", $entry->dueBy);
+			$entry->title = htmlspecialchars ($entry->title);
+			$entry->details = htmlspecialchars ($entry->details);
+			$entry->id = $entry->_id = $id;
+			header ("Content-Type: application/json; charset=utf-8");
 			echo json_encode ($entry); // output original
 		} else {
 			$this->status->show (404); // error
@@ -216,9 +255,13 @@ class REST {
 	}
 
 	public function delete ($id) {
-		$sql = "DELETE FROM list WHERE id = '$id'";
-		$this->db->query ($sql);
-		if ($this->db->affected_rows) {
+		if ($stmt = $this->db->prepare ("DELETE FROM list WHERE id = ?")) {
+			$stmt->bind_param ("i", $id);
+			$stmt->execute ();
+			$deleted = $stmt->affected_rows;
+			$stmt->close ();
+		}
+		if ($deleted) {
 			$this->status->show (200);
 		} else {
 			$this->status->show (404); // id not found
@@ -226,23 +269,57 @@ class REST {
 	}
 
 	public function auth ($un, $pw) {
-		$pwx = md5 ($pw);
-		$sql = "SELECT id, un FROM auth WHERE un = '".addslashes ($un)."' AND pw = '".addslashes ($pwx)."'";
-		$res = $this->db->query ($sql);
-		$row = $res->fetch_assoc ();
-		if ($row['id']) {
+		if ($stmt = $this->db->prepare ("SELECT id, un FROM auth WHERE un = ? AND pw = ?")) {
+			$stmt->bind_param ("ss", $un, md5 ($pw));
+			$stmt->execute ();
+			$stmt->bind_result ($id, $un);
+			$stmt->fetch ();
+			$stmt->close ();
+		}
+		if ($id) {
 			session_start ();
-			$_SESSION['auth'] = $row['id'];
+			$_SESSION['auth'] = $id;
 			if ($_POST['next'] == 'redirect') {
-				header ("HTTP/1.1 302 Moved Temporarily");
-				header ("Location: /todo/index.php");
+				$this->status->show (302, '/todo/index.php');
 			} else {
 				$this->status->show (200);
 			}
 		} else {
-			$this->status->show (404); // auth not found
 			if ($_POST['next'] == 'redirect') {
 				echo "Sorry, you could not be authorised.";
+			} else {
+				$this->status->show (404); // auth not found
+			}
+		}
+	}
+
+	public function register ($un, $pw) {
+		if ($stmt = $this->db->prepare ("SELECT id, un FROM auth WHERE un = ?")) {
+			$stmt->bind_param ("s", $un);
+			$stmt->execute ();
+			$stmt->bind_result ($id, $un);
+			$stmt->fetch ();
+			$stmt->close ();
+		}
+		if ($id) {
+			$this->status->show (400); // already registered
+		} else {
+			if ($stmt = $this->db->prepare ("INSERT INTO auth (id, un, pw) VALUES (NULL, ?, ?)")) {
+				$stmt->bind_param ("ss", $un, md5 ($pw));
+				$stmt->execute ();
+				$id = $stmt->insert_id;
+				$stmt->close ();
+			}
+			if ($id) {
+				session_start ();
+				$_SESSION['auth'] = $id;
+				if ($_POST['next'] == 'redirect') {
+					$this->status->show (302, '/todo/index.php');
+				} else {
+					$this->status->show (200);
+				}
+			} else {
+				$this->status->show (400); // error
 			}
 		}
 	}
@@ -252,14 +329,18 @@ class REST {
 		if (!$_SESSION['auth']) {
 			return false;
 		} else {
-			$sql = "SELECT un FROM auth WHERE id = '".$_SESSION['auth']."'";
-			$res = $this->db->query ($sql);
-			$row = $res->fetch_assoc ();
-			return $row['un'];
+			if ($stmt = $this->db->prepare ("SELECT un FROM auth WHERE id = ?")) {
+				$stmt->bind_param ("i", $_SESSION['auth']);
+				$stmt->execute ();
+				$stmt->bind_result ($un);
+				$stmt->fetch ();
+				$stmt->close ();
+			}
+			return $un;
 		}
 	}
 
 }
 
-$rest = new REST ();
+new REST ();
 ?>
